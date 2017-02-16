@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 import json
-DataDir = "D:\\Data\\!pulses data"
+DataDir = ".\\Data\\"
 files = os.listdir(DataDir)
 #rint(files)
 
@@ -48,7 +48,7 @@ newdata = data(files)
 # USER interface
 #####################################
 
-files_by_date = newdata.slice_by_date_crop_by_time('20-12-2016',time1 = '00-00-00')
+files_by_date = newdata.slice_by_date_crop_by_time('13-01-2017',time1 = '00-00-00')
 
 freqs = []
 powers = []

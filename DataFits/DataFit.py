@@ -27,7 +27,11 @@ class DataFit:
 
 
     def x_fun(self, row):
-        return row[self.x_row]
+        if isinstance(self.x_row,str):
+            idx = self.data_headers.index(self.x_row)
+        else:
+            idx = self.x_row
+        return row[idx]
 
     def y_fun(self, row):
         if self.counts_type == 0:
@@ -85,6 +89,12 @@ class DataFit:
 
         def get_data(idxs, headers, values, data_type,value_errors=None):
             for l in idxs:
+                if isinstance(l,str):
+                    try:
+                        l = headers.index(l)
+                    except ValueError:
+                        print('Data header is not found when building info label: {0} in {1}'.format(l,headers))
+                        continue
                 try:
                     if value_errors is not None:
                         label_data.append(
