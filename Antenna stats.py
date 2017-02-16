@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 import os
 import json
-DataDir = "D:\\Data\\!pulses data"
+DataDir = ".\\Data\\"
 files = os.listdir(DataDir)
 #rint(files)
 enable_date_filter = True

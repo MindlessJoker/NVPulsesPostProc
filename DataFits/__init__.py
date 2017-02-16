@@ -128,7 +128,7 @@ class RabiFit3sin(DataFit): #single
         sp_plot.set_alpha(0.5)
         sp_plot.set_yscale('log')
         sp_plot.get_yaxis().set_ticks([])
-        sp_plot.plot(fs,power_spectrum)
+   
 class RabiFit1(DataFit): #single
     max_frequency = 6.0
     plot_power_spectrum = True
@@ -670,8 +670,8 @@ class polarization(DataFit):
         x_data_fit, y_data_fit = self.fitted_data()
         axes.plot(x_data_fit, y_data_fit, fit_format, lw=3, label=self.compose_label())
         #axes.plot(self.x_data, self.y_data, data_format)
-        signal = self.all_data[:,-1]
-        reference = self.all_data[:,-2]
+        signal = np.array(self.all_data[:,-1],dtype=float)
+        reference = np.array(self.all_data[:,-2],dtype=float)
         norm = np.mean((signal+reference)/2.)
 
         signal/=norm
@@ -681,3 +681,42 @@ class polarization(DataFit):
         axes.set_xlabel(self.plot_x_label())
         axes.set_ylabel(self.plot_y_label())
         axes.legend(loc='best')
+
+class XY_mapfit():
+    data_fit = ESRFit2
+    map_fit_parameter = 2 #2
+    def __init__(self, data, headers=[].copy()):
+        self.data_headers = headers
+        self.first_row = data[0]
+        self.all_data = np.array(data)
+        self.x_idx = headers.index('X')
+        self.y_idx = headers.index('Y')
+        self.Xs = np.unique(self.all_data[:,self.x_idx])
+        self.Ys = np.unique(self.all_data[:,self.y_idx])
+        self.xxs,self.yys = np.meshgrid(self.Xs,self.Ys)
+
+        map_data = []
+        if isinstance(self.map_fit_parameter,str):
+            fit_param_idx = self.data_fit.label_fit_params.index(self.map_fit_parameter)
+        else:
+            fit_param_idx = self.map_fit_parameter
+        for x,y in zip(self.xxs.flatten(),self.yys.flatten()):
+            cur_fit = self.data_fit(self.select_data_by_XY(x,y),self.data_headers)
+            try:
+                map_data.append(cur_fit.fit_parameters[fit_param_idx])
+            except:
+                map_data.append(np.nan)
+        self.map_data = np.array(map_data).reshape(self.xxs.shape)
+    def select_data_by_XY(self,x,y):
+        row_idxs = np.logical_and( self.all_data[:, self.x_idx] == x, self.all_data[:, self.y_idx] == y).nonzero()[0]
+        return self.all_data[row_idxs,:]
+    def plot_me(self, axes, data_format=None, fit_format=None, comment=None):
+        CS = axes.contour(self.xxs,self.yys,self.map_data)
+        axes.clabel(CS, inline=1, fontsize=10)
+        axes.set_xlabel('X')
+        axes.set_ylabel('Y')
+class ESR_map(XY_mapfit):
+    pass
+
+
+
