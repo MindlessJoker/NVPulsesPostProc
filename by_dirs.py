@@ -8,4 +8,4 @@ for f in os.listdir('.\\'):
         if not os.path.exists(dirname):
             os.makedirs(dirname)
 
-        shutil.copyfile(f,os.path.join(dirname,f))
+        shutil.move(f,os.path.join(dirname,f))

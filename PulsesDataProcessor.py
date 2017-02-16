@@ -30,10 +30,11 @@ class PulsesDataProcessor:
         "Rabi oscillation" : DataFitBySweepSelector( [ ("T pulse",RabiFit1),("MW Frequency",ESRFit) ]),
         "Pi pulse check"   : DataFitBySweepSelector( [ ("T pulse",PiPulseFit),("MW Frequency",ESRFit) ]),
         "Excitation-collection align": ExcitationCollectionAlignmentFit,
-        "ESR":ESRFit,
+        "ESR": DataFitBySweepSelector( [ ("Delay to ref.col.",polarization),("MW Frequency",ESRFit) ] ),
         "Spin echo": EchoFit4,
         "Dynamic Scheme": DynamicScheme,
         "T1":T1Fit,
+        "Ramsey\n":RamseyFit
     }
     def __init__(self,data_dict):
         self.data = data_dict
