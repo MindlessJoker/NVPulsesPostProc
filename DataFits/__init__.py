@@ -7,6 +7,9 @@ import numpy as np
 from numpy import exp,cos
 import scipy as scp
 from matplotlib import pyplot as plt
+import matplotlib
+import matplotlib.axes
+import matplotlib.gridspec as gridspec
 from scipy import signal as s
 from scipy.fftpack import fft,fftfreq,fftshift
 #for single NV
@@ -130,10 +133,9 @@ class RabiFit3sin(DataFit): #single
         sp_plot.get_yaxis().set_ticks([])
    
 class RabiFit1(DataFit): #single
-    max_frequency = 6.0
-    plot_power_spectrum = True
-    plot_envelope = True
-    x_row = 4 # T pulse
+    max_frequency = 9.0
+
+    x_row = 'T pulse'
     counts_type=1
     fit_params_description = ['level',
                               'Contrast',
@@ -142,6 +144,10 @@ class RabiFit1(DataFit): #single
                               'fi']
     label_fit_params = [1,2,3]
     #label_data_params = [0,1] # frequency, power #added in label_additional info
+    def __init__(self,*args,**kwargs):
+        super(RabiFit1,self).__init__(*args,**kwargs)
+        self.plot_power_spectrum = True
+        self.plot_envelope = True
     def initial_guess(self,x_data,y_data): #Must be defined by user
         level = max(y_data)
         fs,pwrs = get_power_spectrum(x_data*1e-3,y_data,df=0.1,maxF=self.max_frequency)
@@ -250,7 +256,7 @@ class RamseyFit(DataFit):
 
 
 class RabiFit(DataFit): # ens
-    x_row = 4 # T pulse
+    x_row = 'T pulse'
     counts_type=1
     fit_params_description = ['level',
                               'intensity',
@@ -279,7 +285,7 @@ class PiPulseFit(DataFit):
         return level + contrast*np.exp(-t/t_coh)*np.power(np.cos(np.pi*(t+comp)/pi_tau/2),2)
 
 class ExcitationCollectionAlignmentFit(DataFit):
-    x_row = 3 #Shift
+    x_row = 3 #Shift ????
     counts_type=0
     fit_params_description = ['noise level',
                               'half_width',
@@ -296,7 +302,7 @@ class ExcitationCollectionAlignmentFit(DataFit):
         return noise_level + (1-abs(t-t0)/half_width)*height
 
 class ESRFit2(DataFit):
-    x_row = 0 # Frequency
+    x_row = 'MW Frequency' #0
     counts_type=1
     label_fit_params = [0,1,2,3]
     fit_params_description = ['Width',
@@ -310,7 +316,7 @@ class ESRFit2(DataFit):
         return 1 - (width*alpha)/((freq-position)**2+(width**2)/4)
 
 class ESRFitMono(DataFit):
-    x_row = 0 # Frequency
+    x_row = 'MW Frequency' #0
     counts_type=1
     label_fit_params = [0,3,2,5]
     fit_params_description = ['Width',
@@ -349,7 +355,7 @@ class ESRFitMono(DataFit):
 
 class ESRFit(DataFit):
 
-    x_row = 0 # Frequency
+    x_row = 'MW Frequency' # 0
     counts_type=1
     label_fit_params = []
     fit_params_description = []
@@ -456,7 +462,7 @@ class ESRFit(DataFit):
 
 
 class EchoFit4(DataFit):
-    x_row = 5 # T pulse
+    x_row = 'T echo'
     counts_type = 2
     fit_params_description = ['intensity',
                               'T2',
@@ -473,11 +479,14 @@ class EchoFit4(DataFit):
     def fit_fun(self,t,intensity, T2,level,N): #Must be defined by user
         return level+(intensity*np.exp(-(t/T2)**N))
     def x_fun(self, row):
+        pi_time = self.get_data_from_row(row,'PI time')
+        pi_comp = self.get_data_from_row(row,'PI compensation')
+        x_data = self.get_data_from_row(row,self.x_row)
         #4 -> Pi time 6-> Pi compensation
-        pi_half = row[4]/2. + row[6]
-        pi = row[4] + row[6]
-        echo_correction = pi_half*2 + pi #pi_time
-        return row[self.x_row]*2+echo_correction
+        pi_half = pi_time/2. + pi_comp
+        pi = pi_time + pi_comp
+        echo_correction = pi_half*2. + pi #pi_time
+        return x_data*2.+echo_correction
     def y_fun(self, row):
         return (row[-1] - row[-2]) / (row[-1] + row[-2])*2.0 if (row[-1] + row[-2]) != 0.0 else -1.0
 
@@ -504,7 +513,7 @@ class EchoFit4(DataFit):
         axes.legend(loc='best')
 
 class EchoFit2(DataFit):
-    x_row = 5 # T pulse
+    x_row =  'T pulse'
     counts_type = 1
     fit_params_description = ['intensity',
                               'T2_star',
@@ -521,7 +530,7 @@ class EchoFit2(DataFit):
         return 1+(intensity/(1+np.exp((t-T2_thresh)/T2_star)))
 
 class EchoFit3(DataFit):
-    x_row = 5 # T pulse
+    x_row = 'T pulse' #5+2
     counts_type = 1
     fit_params_description = ['intensity',
                               'T2_star',
@@ -538,7 +547,7 @@ class EchoFit3(DataFit):
         return T2_thresh+(intensity*np.exp(-(t/T2_star)**2))
 
 class EchoFit(DataFit):
-    x_row = 5 # T pulse
+    x_row = 'T pulse' # 5 + 2
     counts_type = 1
     fit_params_description = ['intensity',
                               'T2',
@@ -590,7 +599,7 @@ class DynamicScheme(DataFit):
 
 
 class T1Fit(DataFit):
-    x_row = 5 # T pulse
+    x_row = 'T pulse' #5+2
     counts_type = 2
     fit_params_description = ['intensity',
                               'T2',
@@ -607,11 +616,16 @@ class T1Fit(DataFit):
     def fit_fun(self,t,intensity, T2,level,N): #Must be defined by user
         return level+(intensity*np.exp(-(t/T2)**N))
     def x_fun(self, row):
+        pi_time = self.get_data_from_row(row,'MW Pi pulse time')
+        #pi_comp = self.get_data_from_row(row,'PI compensation')
+        x_data = self.get_data_from_row(row,self.x_row)
+        return x_data
         #4 -> Pi time 6-> Pi compensation
-        pi_half = row[4]/2. + row[6]
-        pi = row[4] + row[6]
-        echo_correction = pi_half*2 + pi #pi_time
-        return row[self.x_row]*2+echo_correction
+        pi_half = pi_time/2. + pi_comp
+        pi = pi_time + pi_comp
+        echo_correction = pi_half*2. + pi #pi_time
+        return x_data*2.+echo_correction
+        #4 -> Pi time 6-> Pi compensation
     def y_fun(self, row):
         return (row[-1] - row[-2]) / (row[-1] + row[-2])*2.0 if (row[-1] + row[-2]) != 0.0 else -1.0
 
@@ -638,7 +652,7 @@ class T1Fit(DataFit):
         axes.legend(loc='best')
 
 class polarization(DataFit):
-    x_row = 3 # T pulse
+    x_row = 'T pulse' #3+2
     counts_type = 2
     fit_params_description = ['intensity',
                               'T_init',
@@ -685,6 +699,9 @@ class polarization(DataFit):
 class XY_mapfit():
     data_fit = ESRFit2
     map_fit_parameter = 2 #2
+    plot_fits = True
+    subfit_plot_params = {}
+    #um_per_volts = 6.6
     def __init__(self, data, headers=[].copy()):
         self.data_headers = headers
         self.first_row = data[0]
@@ -695,6 +712,7 @@ class XY_mapfit():
         self.Ys = np.unique(self.all_data[:,self.y_idx])
         self.xxs,self.yys = np.meshgrid(self.Xs,self.Ys)
 
+        self.subfits = []
         map_data = []
         if isinstance(self.map_fit_parameter,str):
             fit_param_idx = self.data_fit.label_fit_params.index(self.map_fit_parameter)
@@ -702,6 +720,7 @@ class XY_mapfit():
             fit_param_idx = self.map_fit_parameter
         for x,y in zip(self.xxs.flatten(),self.yys.flatten()):
             cur_fit = self.data_fit(self.select_data_by_XY(x,y),self.data_headers)
+            self.subfits.append(cur_fit)
             try:
                 map_data.append(cur_fit.fit_parameters[fit_param_idx])
             except:
@@ -711,12 +730,56 @@ class XY_mapfit():
         row_idxs = np.logical_and( self.all_data[:, self.x_idx] == x, self.all_data[:, self.y_idx] == y).nonzero()[0]
         return self.all_data[row_idxs,:]
     def plot_me(self, axes, data_format=None, fit_format=None, comment=None):
+        assert isinstance(axes,matplotlib.axes.Axes)
         CS = axes.contour(self.xxs,self.yys,self.map_data)
         axes.clabel(CS, inline=1, fontsize=10)
-        axes.set_xlabel('X')
-        axes.set_ylabel('Y')
+        axes.set_xlabel('X, Volt(~100um per Volt)')
+        axes.set_ylabel('Y, Volt(~100um per Volt)')
+        axes.set_title(comment)
+        if self.plot_fits:
+
+            xlen = len(self.Xs)
+            ylen = len(self.Ys)
+            gs = gridspec.GridSpec(ylen,xlen*2)
+
+            fig = axes.get_figure()
+            fig.set_figwidth(fig.get_figwidth()*2.)
+            axes.set_position(gs[:,:xlen].get_position(fig))
+            axes.set_subplotspec(gs[:,:xlen])
+
+            for i,f in enumerate(self.subfits):
+                a = fig.add_subplot(gs[ylen-1-int(i/xlen),xlen+i%xlen])
+
+                f.plot_me(a,**self.subfit_plot_params)
+                a.set_xlabel('')
+                a.set_ylabel('')
+                a.xaxis.set_major_formatter(plt.FormatStrFormatter('%1.0f'))
+                a.yaxis.set_major_formatter(plt.FormatStrFormatter('%1.3f'))
+                #a.locator_params(nbins=1)
+                x = self.xxs.flatten()[i]
+                y = self.yys.flatten()[i]
+                fontdict={
+                    'fontsize': 6,
+                     'fontweight' : 'bold',
+                     'verticalalignment': 'baseline',
+                     'horizontalalignment': 'center'}
+                a.set_title('({0:.2f},{1:.2f})'.format(x,y),fontdict=fontdict)
+                a.get_xaxis().set_ticks([min(f.x_data),max(f.x_data)])
+                a.get_yaxis().set_ticks([min(f.y_data),max(f.y_data)])
+                for tick in a.xaxis.get_major_ticks():
+                    tick.label.set_fontsize(6)
+                for tick in a.yaxis.get_major_ticks():
+                    tick.label.set_fontsize(6)
+                a.legend().set_visible(False)
 class ESR_map(XY_mapfit):
     pass
 
-
-
+class RabiFit1_no_spectrum(RabiFit1):
+    def __init__(self,*args,**kwargs):
+        super(RabiFit1_no_spectrum,self).__init__(*args,**kwargs)
+        self.plot_power_spectrum = False
+        self.plot_envelope = True
+class Rabi_map(XY_mapfit):
+    data_fit = RabiFit1_no_spectrum
+    map_fit_parameter = 2 # Frequency
+    subfit_plot_params = {}

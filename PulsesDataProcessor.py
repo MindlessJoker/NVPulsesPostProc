@@ -27,12 +27,18 @@ class DataFitBySweepSelector():
         return DataFit
 class PulsesDataProcessor:
     data_fit_funcs = {
-        "Rabi oscillation" : DataFitBySweepSelector( [ ("T pulse",RabiFit1),("MW Frequency",ESRFit) ]),
+        "Rabi oscillation" : DataFitBySweepSelector( [
+                    ("T pulse",RabiFit1),
+                    ("MW Frequency",ESRFit),
+                    (['X','Y',"T pulse"],Rabi_map)
+        ]),
         "Pi pulse check"   : DataFitBySweepSelector( [ ("T pulse",PiPulseFit),("MW Frequency",ESRFit) ]),
         "Excitation-collection align": ExcitationCollectionAlignmentFit,
-        "ESR": DataFitBySweepSelector( [ ("Delay to ref.col.",polarization),
-                                         ("MW Frequency",ESRFit),
-                                         (['X','Y',"MW Frequency"],ESR_map) ] ),
+        "ESR": DataFitBySweepSelector( [
+                ("Delay to ref.col.",polarization),
+                ("MW Frequency",ESRFit),
+                (['X','Y',"MW Frequency"],ESR_map) ]
+        ),
         "Spin echo": EchoFit4,
         "Dynamic Scheme": DynamicScheme,
         "T1":T1Fit,

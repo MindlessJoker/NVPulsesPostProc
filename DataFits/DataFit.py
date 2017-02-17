@@ -17,6 +17,15 @@ class DataFit:
     label_data_params = []
     fit_format = None
     data_format = None
+    def get_data_from_row(self,row,data_idx):
+        if isinstance(data_idx,str):
+            try:
+                idx = self.data_headers.index(data_idx)
+            except ValueError:
+                raise ValueError('"{0}" does not present in data headers({1})'.format(data_idx,self.data_headers))
+        else:
+            idx = data_idx
+        return row[idx]
     def __init__(self, data, headers=[].copy()):
         self.data_headers = headers
         self.first_row = data[0]
@@ -27,11 +36,12 @@ class DataFit:
 
 
     def x_fun(self, row):
-        if isinstance(self.x_row,str):
-            idx = self.data_headers.index(self.x_row)
-        else:
-            idx = self.x_row
-        return row[idx]
+        return self.get_data_from_row(row,self.x_row)
+        # if isinstance(self.x_row,str):
+        #     idx = self.data_headers.index(self.x_row)
+        # else:
+        #     idx = self.x_row
+        # return row[idx]
 
     def y_fun(self, row):
         if self.counts_type == 0:
@@ -114,8 +124,12 @@ class DataFit:
         return '\n'.join(label_data)
 
     def plot_x_label(self):
+        if isinstance(self.x_row,str):
+            idx = self.data_headers.index(self.x_row)
+        else:
+            idx = self.x_row
         try:
-            return self.data_headers[self.x_row]
+            return self.data_headers[idx]
         except IndexError:
             return ''
 
