@@ -48,27 +48,30 @@ newdata = data(files)
 # USER interface
 #####################################
 
-files_by_date = newdata.slice_by_date_crop_by_time('17-02-2017',time1 = '00-00-00')
+files_by_date = newdata.slice_by_date_crop_by_time('30-05-2017',time1 = '00-00-00')
 
 freqs = []
 powers = []
 print(files_by_date)
 
 for i,f in enumerate(files_by_date):
-    print(f)
     picturename = f[0:-5]+'_.png'
     if not os.path.exists(picturename):
         data_file = open(os.path.join(DataDir,f),'r')
         data = json.load(data_file)
-        proc = PulsesDataProcessor.PulsesDataProcessor(data)
-        print(data['comment'])
-        ax = plt.subplot(111)
-        proc.plot(ax)
-        plt.legend(loc='best')
-        plt.savefig(f[:-5]+'_.png')
-        plt.close()
+        try:
+            proc = PulsesDataProcessor.PulsesDataProcessor(data)
+            print(f+': '+data['comment'])
+            ax = plt.subplot(111)
+            proc.plot(ax)
+            plt.legend(loc='best')
+            plt.savefig(f[:-5]+'_.png')
+            plt.close()
+        except Exception as e:
+            print('Exception raised for {0}'.format(f))
+            print(e)
     else:
-        print('skip already exists')
+        print('skip {0}'.format(f))
 
 # ax = plt.subplot(111)
 #

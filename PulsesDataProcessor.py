@@ -29,7 +29,8 @@ class PulsesDataProcessor:
     data_fit_funcs = {
         "Rabi oscillation" : DataFitBySweepSelector( [
                     ("T pulse",RabiFit1),
-                    ("MW Frequency",ESRFit),
+                    ("MW Frequency",ESRFit_pulsed),
+                    (["T pulse","MW Frequency"],RabiFitScanFreq),
                     (['X','Y',"T pulse"],Rabi_map)
         ]),
         "Pi pulse check"   : DataFitBySweepSelector( [ ("T pulse",PiPulseFit),("MW Frequency",ESRFit) ]),
@@ -44,9 +45,15 @@ class PulsesDataProcessor:
         "T1":T1Fit,
         "Ramsey\n":RamseyFit
     }
+    modulation_scheme_alias = {
+        'Rabi oscillation (unbalanced)': 'Rabi oscillation'
+    }
     def __init__(self,data_dict):
         self.data = data_dict
-        fit = self.data_fit_funcs.get(self.data["modulation_scheme"],DataFit)
+        mod_scheme = self.data["modulation_scheme"]
+        if mod_scheme not in self.data_fit_funcs.keys():
+            mod_scheme = self.modulation_scheme_alias[mod_scheme]
+        fit = self.data_fit_funcs.get(mod_scheme,DataFit)
         if isinstance(fit,DataFitBySweepSelector):
             fit = fit.get_fit(data_dict)
         if fit == DataFit:

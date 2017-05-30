@@ -99,6 +99,7 @@ class DataFit:
 
         def get_data(idxs, headers, values, data_type,value_errors=None):
             for l in idxs:
+                print
                 if isinstance(l,str):
                     try:
                         l = headers.index(l)
@@ -107,10 +108,12 @@ class DataFit:
                         continue
                 try:
                     if value_errors is not None:
+                        print(l, headers[l], values[l])
                         label_data.append(
                             '{0} = {1:.2f} ({2:.2f})'.format(headers[l], values[l],value_errors[l])
                         )
                     else:
+                        #print(l, headers[l], values[l])
                         label_data.append(
                             '{0} = {1:.2f}'.format(headers[l], values[l])
                         )
@@ -154,7 +157,7 @@ class DataFit:
 
         axes.set_xlabel(self.plot_x_label())
         axes.set_ylabel(self.plot_y_label())
-        axes.legend(loc='center')
+        axes.legend(loc='center',framealpha=0.4)
 
     def plotpulses(self,axes, lengths): # length in Pi
         fit_f = self.build_fit(*(self.fit_parameters))

@@ -1,35 +1,23 @@
-from .DataFit import DataFit
-from scipy import optimize
 from pylab import ravel
+from scipy import optimize
+import numpy as np
+from matplotlib import pyplot as plt
+#from DataFits.Rabi import RabiFit1
+from DataFits.utils import get_power_spectrum
+from .DataFit import DataFit
+
 __author__ = 'Vladimir'
 
-import numpy as np
 from numpy import exp,cos
-import scipy as scp
-from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.axes
+from scipy import optimize as opt
 import matplotlib.gridspec as gridspec
 from scipy import signal as s
-from scipy.fftpack import fft,fftfreq,fftshift
+import scipy
+#from .Rabi import *
 #for single NV
 
-def get_power_spectrum(xs,ys,maxF = 5.,df= 0.05,exclude_DC=True):
-    ts = xs
-    dt = ts[1]-ts[0]
-    n_fourier = max(int(1./df/dt),len(ys))
-    n_fourier += n_fourier%1+1 #odd data count
-    if exclude_DC:
-        ysw = fft(ys - np.mean(ys),n_fourier)
-    else:
-        ysw = fft(ys,n_fourier)
-    power_spectrum = ysw[1:]
-    power_spectrum = abs(power_spectrum)**2
-    power_spectrum += power_spectrum[::-1]
-    fs = np.arange(len(ysw))/dt/n_fourier
-    power_spectrum = power_spectrum[np.nonzero(fs<maxF)]
-    fs = fs[np.nonzero(fs<maxF)]
-    return fs,power_spectrum
 class RabiFit3sin(DataFit): #single
     plot_power_spectrum = True
     plot_envelope = True
@@ -44,7 +32,7 @@ class RabiFit3sin(DataFit): #single
     #label_data_params = [0,1] # frequency, power #added in label_additional info
     def initial_guess(self,x_data,y_data): #Must be defined by user
         level = max(y_data)
-        fs,pwrs = get_power_spectrum(x_data*1e-3,y_data,df=0.1,maxF=2.)
+        fs,pwrs = get_power_spectrum(x_data * 1e-3, y_data, df=0.1, maxF=2.)
         f = fs[np.argmax(pwrs[1:])+1] #exclude 0 freq
         #print('Rabi fit: guessed F={0}'.format(f))
         return [level,1, f, 1000.0,0.0]
@@ -106,7 +94,7 @@ class RabiFit3sin(DataFit): #single
         #axes.plot(self.x_data, self.y_data, data_format)
         axes.set_xlabel('MW duration, ns')
         axes.set_ylabel(self.plot_y_label())
-        leg = axes.legend(loc='upper right')
+        leg = axes.legend(loc='upper right',framealpha=0.4)
         leg.get_frame().set_alpha(0.5)
         t0 = min(0,-self.fit_parameters[4]/(2.*np.pi*self.fit_parameters[2]*1.e-3))
         axes.set_xlim((t0,max(x_data_fit)))
@@ -123,17 +111,89 @@ class RabiFit3sin(DataFit): #single
             fit_f = self.build_fit(*(self.fit_parameters))
             ts = np.linspace(t0,min(x_data_fit),100)
             axes.plot(ts,fit_f(ts),'--', color = c_fit, lw=3)
+
     def plot_fft(self,axes,xs,ys):
-        fs,power_spectrum = get_power_spectrum(xs*1e-3,ys,df=0.1,maxF=5.)
+        fs,power_spectrum = get_power_spectrum(xs * 1e-3, ys, df=0.1, maxF=5.)
         sp_plot = plt.axes([0.6,0.2,0.3,0.1])
         sp_plot.set_xlabel('F, Mhz')
         sp_plot.set_ylabel('Power')
         sp_plot.set_alpha(0.5)
         sp_plot.set_yscale('log')
         sp_plot.get_yaxis().set_ticks([])
-   
+
+
+#for the ensemble
+
+class RamseyFit(DataFit):
+    x_row = 5
+    counts_type = 1
+
+    fit_params_description = ['level',
+                              'a1',
+                              'a2',
+                              'a3',
+                              'central detuning, Mhz',
+                              'T2*,ns',
+                              'phi']
+    label_fit_params = [0,1,2,3,4,5,6]
+    label_data_params = [0,1] # frequency, power
+    def initial_guess(self,x_data,y_data): #Must be defined by user
+        return [1,0.1,0.1,0.1, 0.5, 200.0,0.0]
+    def fit_fun(self,t,level,a1,a2,a3, freq, T2_star,phi): #Must be defined by user
+
+        freq0 = freq
+        freq1 = 2.200-freq
+        freq2 = freq0 + 2.200
+
+        sumofcos = abs(a1)*cos(2*np.pi*freq0*1e-3*t-phi)+\
+                   abs(a2)*cos(2*np.pi*freq1*1e-3*t-phi)+\
+                   abs(a3)*cos(2*np.pi*freq2*1e-3*t-phi)
+
+        return (abs(level)-sumofcos*exp(-t/abs(T2_star)))
+
+    def plot_me(self, axes, data_format=None, fit_format=None,comment=None):
+        #c = rand_color()
+        data_format = self.data_format if data_format is None else data_format
+        fit_format = self.fit_format if fit_format is None else fit_format
+        data_format = 'k+-' + '+-' if data_format is None else data_format
+        fit_format = 'r-' + '-' if fit_format is None else fit_format
+        axes.plot(self.x_data, self.y_data, 'k+-')
+        x_data_fit, y_data_fit = self.fitted_data()
+        axes.plot(x_data_fit, y_data_fit, fit_format, lw=3, label=self.compose_label())
+        axes.plot(self.x_data, self.y_data, 'r-')
+        axes.set_xlabel(self.plot_x_label())
+        axes.set_ylabel(self.plot_y_label())
+        axes.legend(loc='best',framealpha=0.4)
+        # if max(self.x_data)>2870.0 and min(self.x_data)<2870.0:
+        #     axes.plot([2870,2870],[0,2],'r--')
+        # for i in range(self.n):
+        #     axes.text(self.positions[i]+0.5,
+        #               -0.002+self.fit_fun(self.positions[i],
+        #                                                    *self.fit_parameters),'{0:.1f}\n({3:.1f})'
+        #                                                                          '({1:.2f})\n{2:.1f}G'.format(self.positions[i],self.widths[i],abs(self.positions[i]-2870.0)/2.8,self.fit_parameters_error[2*self.n+i]),color='r')
+
+        # axes.text(np.mean(self.x_data),max(self.y_data),comment)
+        # axes.set_ylim(min(self.y_data)*0.9995,max(self.y_data)*1.0001)
+
+
+
+class RabiFit(DataFit): # ens
+    x_row = 'T pulse'
+    counts_type=1
+    fit_params_description = ['level',
+                              'intensity',
+                              'w Rabi, Mhz',
+                              'T2*,ns',
+                              'T1,ns']
+    label_fit_params = [1,2,3,4]
+    label_data_params = [0,1] # frequency, power
+    def initial_guess(self,x_data,y_data): #Must be defined by user
+        return [0.99,0.008, 1, 1000.0,1000000.0]
+    def fit_fun(self,t,level,intensity, freq, T2_star,T3_star): #Must be defined by user
+        return level*((intensity*(0.5*(1+cos(2*np.pi*freq*1e-3*t-30)))*exp(-t/T2_star)+1-intensity)*exp(-t/T3_star)+0.7)
+
 class RabiFit1(DataFit): #single
-    max_frequency = 9.0
+    max_frequency = 11.2
 
     x_row = 'T pulse'
     counts_type=1
@@ -142,7 +202,7 @@ class RabiFit1(DataFit): #single
                               'Rabi frequency',
                               'T2_star',
                               'fi']
-    label_fit_params = [1,2,3]
+    label_fit_params = [1,2,3,4]
     #label_data_params = [0,1] # frequency, power #added in label_additional info
     def __init__(self,*args,**kwargs):
         super(RabiFit1,self).__init__(*args,**kwargs)
@@ -153,7 +213,7 @@ class RabiFit1(DataFit): #single
         fs,pwrs = get_power_spectrum(x_data*1e-3,y_data,df=0.1,maxF=self.max_frequency)
         f = fs[np.argmax(pwrs[1:])+1] #exclude 0 freq
         #print('Rabi fit: guessed F={0}'.format(f))
-        return [level,1, f, 1000.0,0.0]
+        return [level,0.3, f, 1000.0,0.0]
     #def parameter_scoring(self,*params):
      #   freq0=0.5
       #  freq1=8.5
@@ -165,6 +225,8 @@ class RabiFit1(DataFit): #single
     def label_additional_info(self):
         freq = self.fit_parameters[2]*1e-3 #in Ghz/ns
         fi = self.fit_parameters[4]
+        if fi<0:
+            fi+=2.*np.pi
         pi_length = (0.5 - fi/2./np.pi)/freq
         pi_length_uncomp = (0.5)/freq
         pi_comp = (-fi/2./np.pi)/freq
@@ -172,7 +234,7 @@ class RabiFit1(DataFit): #single
                 'Pi= {0:.1f} ns'.format(pi_length),
                 'Echo: pi= {0:.1f} ns, pi_comp={1:.1f} ns'.format(pi_length_uncomp, pi_comp)]
     def fit_fun(self,t,level,intensity, freq, T2_star,fi): #Must be defined by user
-        return level*(1.0 - intensity*0.5*(np.cos(2*np.pi*freq*1e-3*t+fi))*np.exp(-t/T2_star))
+        return level*(1.0 - abs(intensity)*0.5*(np.cos(2*np.pi*abs(freq)*1e-3*t+fi+np.pi))*np.exp(-t/T2_star))
         # tau = t/T2_star
         # return level*exp(-tau)*(0.05+0.8*exp(tau)+0.15*cos(2*np.pi*t*freq*1e-3+fi))
     def envelopes(self,t0,t1,n_points=200):
@@ -208,7 +270,7 @@ class RabiFit1(DataFit): #single
         #axes.plot(self.x_data, self.y_data, data_format)
         axes.set_xlabel('MW duration, ns')
         axes.set_ylabel(self.plot_y_label())
-        leg = axes.legend(loc='upper right')
+        leg = axes.legend(loc='upper right',framealpha=0.4)
         leg.get_frame().set_alpha(0.5)
         t0 = min(0,-self.fit_parameters[4]/(2.*np.pi*self.fit_parameters[2]*1.e-3))
         axes.set_xlim((t0,max(x_data_fit)))
@@ -228,7 +290,7 @@ class RabiFit1(DataFit): #single
         axes.plot(self.x_data, self.y_data, '-', color=c_data, lw=1)
         axes.plot(self.x_data, self.y_data, 'o', color=c_data, ms=2)
     def plot_fft(self,axes,xs,ys):
-        fs,power_spectrum = get_power_spectrum(xs*1e-3,ys,df=0.1,maxF=7.)
+        fs,power_spectrum = get_power_spectrum(xs*1e-3,ys,df=0.1,maxF=13.)
         sp_plot = plt.axes([0.6,0.2,0.3,0.1])
         sp_plot.set_xlabel('F, Mhz')
         sp_plot.set_ylabel('Power')
@@ -236,39 +298,7 @@ class RabiFit1(DataFit): #single
         sp_plot.set_yscale('log')
         sp_plot.get_yaxis().set_ticks([])
         sp_plot.plot(fs,power_spectrum)
-#for the ensemble
 
-class RamseyFit(DataFit):
-    x_row = 5
-    counts_type = 1
-    fit_params_description = ['level',
-                              'intensity',
-                              'w Rabi, Mhz',
-                              'T2*,ns',
-                              'phi']
-    label_fit_params = [1,2,3,4]
-    label_data_params = [0,1] # frequency, power
-    def initial_guess(self,x_data,y_data): #Must be defined by user
-        return [0.99,0.008, 1., 200.0,0.0]
-    def fit_fun(self,t,level,intensity, freq, T2_star,phi): #Must be defined by user
-        return abs(level)*(1-abs(intensity)*(1-cos(2*np.pi*abs(freq)*1e-3*t-phi)*exp(-t/abs(T2_star))))
-
-
-
-class RabiFit(DataFit): # ens
-    x_row = 'T pulse'
-    counts_type=1
-    fit_params_description = ['level',
-                              'intensity',
-                              'w Rabi, Mhz',
-                              'T2*,ns',
-                              'T1,ns']
-    label_fit_params = [1,2,3,4]
-    label_data_params = [0,1] # frequency, power
-    def initial_guess(self,x_data,y_data): #Must be defined by user
-        return [0.99,0.008, 1, 1000.0,1000000.0]
-    def fit_fun(self,t,level,intensity, freq, T2_star,T3_star): #Must be defined by user
-        return level*((intensity*(0.5*(1+cos(2*np.pi*freq*1e-3*t-30)))*exp(-t/T2_star)+1-intensity)*exp(-t/T3_star)+0.7)
 
 class PiPulseFit(DataFit):
     x_row = 4 #Pi time
@@ -448,7 +478,7 @@ class ESRFit(DataFit):
 
         axes.set_xlabel(self.plot_x_label())
         axes.set_ylabel(self.plot_y_label())
-        axes.legend(loc='center')
+        axes.legend(loc='center',framealpha=0.4)
         if max(self.x_data)>2870.0 and min(self.x_data)<2870.0:
             axes.plot([2870,2870],[0,2],'r--')
         for i in range(self.n):
@@ -460,6 +490,95 @@ class ESRFit(DataFit):
         axes.text(np.mean(self.x_data),max(self.y_data),comment)
         axes.set_ylim(min(self.y_data)*0.9995,max(self.y_data)*1.0001)
 
+class ESRFit_pulsed(DataFit):
+
+    x_row = 'MW Frequency' # 0
+    counts_type=1
+    label_fit_params = [0,1,2,3]
+    fit_params_description = ['f0','FWHM','contrast','scale']
+    label_data_params = [1] # frequency, power
+
+    data_format = 'k-+'
+    fit_format = 'r-'
+
+
+    def fitfun0(self,f,f0,fwhm,contrast,scale):
+        return scale*(1-(abs(contrast)*(fwhm/2)**2/((f-f0)**2+(fwhm/2)**2)))
+
+    def fit_fun(self,f,*params):#f0,fwhm,contrast,scale,p1,p2):
+
+        return params[3]*(1-(abs(params[2])*abs(params[4])*(params[1]/2)**2/((f-params[0])**2+(params[1]/2)**2))-
+                       (abs(params[2])*abs(params[4])*(params[1]/2)**2/((f-params[0]-2.2)**2+(params[1]/2)**2))-
+                       (abs(params[2])*abs((1-abs(params[4])-abs(params[5])))*(params[1]/2)**2/((f-params[0]+2.20)**2+(params[1]/2)**2)))
+
+
+    def initial_guess(self, x_data, y_data):
+        f0 = self.x_data[list(self.y_data).index(min(self.y_data))]
+        scale = self.y_data[-1]
+        contrast = 0.1
+        width = 5
+
+        params = [f0,width,contrast,scale]
+        popt,pcov = opt.curve_fit(self.fitfun0,self.x_data,self.y_data,p0=params)
+        f0 = popt[0]
+        print(f0)
+
+        return [f0,1,contrast,scale,0.33,0.33]
+
+
+    def try_fit(self, x_data, y_data):
+        error = 0
+        params = np.array(self.initial_guess(x_data, y_data))
+
+        if params == []:
+            self.fit_parameters = np.array([])
+            self.fit_parameters_error = np.array([])
+        else:
+            errorf = lambda p: ravel(self.build_fit(*p)(x_data) - y_data)
+            # p, success = optimize.leastsq(errorf, params, maxfev=1000)
+            # self.fit_parameters = p
+            #             self.fit_error = errorf(p) / float(len(x_data))
+            pfit, pcov, infodict, errmsg, success = optimize.leastsq(errorf, params, maxfev=1000,full_output=True)
+            self.fit_parameters = pfit
+            self.fit_error = errorf(pfit) / float(len(x_data))
+            if pcov is not None:
+                sum_squares = (errorf(pfit)**2).sum() / float(len(x_data)-len(pfit))
+                self.fit_parameters_error = np.diag(abs(pcov*sum_squares))**0.5
+            else:
+                self.fit_parameters_error = np.zeros(self.fit_parameters.shape)
+        # self.fit_success = success!=
+        #return success
+        print(self.fit_parameters)
+        self.n = int(len(pfit)/3)
+        self.widths = pfit[0:self.n]
+        self.alphas = pfit[self.n:2*self.n]
+        self.positions = pfit[2*self.n:3*self.n]
+
+    def plot_me(self, axes, data_format=None, fit_format=None,comment=None):
+        #c = rand_color()
+        data_format = self.data_format if data_format is None else data_format
+        fit_format = self.fit_format if fit_format is None else fit_format
+        data_format = 'k+-' + '+-' if data_format is None else data_format
+        fit_format = 'r-' + '-' if fit_format is None else fit_format
+        axes.plot(self.x_data, self.y_data, data_format)
+        x_data_fit, y_data_fit = self.fitted_data()
+        axes.plot(x_data_fit, y_data_fit, fit_format, lw=3, label=self.compose_label())
+        axes.plot(self.x_data, self.y_data, data_format)
+
+        axes.set_xlabel(self.plot_x_label())
+        axes.set_ylabel(self.plot_y_label())
+        #axes.legend(loc='center',)
+        axes.legend(loc=2,framealpha=0.4)
+        if max(self.x_data)>2870.0 and min(self.x_data)<2870.0:
+            axes.plot([2870,2870],[0,2],'r--')
+        for i in range(self.n):
+            axes.text(self.positions[i]+0.5,
+                      -0.002+self.fit_fun(self.positions[i],
+                                                           *self.fit_parameters),'{0:.1f}\n({3:.1f})'
+                                                                                 '({1:.2f})\n{2:.1f}G'.format(self.positions[i],self.widths[i],abs(self.positions[i]-2870.0)/2.8,self.fit_parameters_error[2*self.n+i]),color='r')
+
+        axes.text(np.mean(self.x_data),max(self.y_data),comment)
+        axes.set_ylim(min(self.y_data)*0.9995,max(self.y_data)*1.0001)
 
 class EchoFit4(DataFit):
     x_row = 'T echo'
@@ -510,7 +629,7 @@ class EchoFit4(DataFit):
         #axes.plot(self.x_data,reference,lw=2,alpha=0.5,color='r',label='Reference')
         axes.set_xlabel(self.plot_x_label())
         axes.set_ylabel(self.plot_y_label())
-        axes.legend(loc='best')
+        axes.legend(loc='best',framealpha=0.4)
 
 class EchoFit2(DataFit):
     x_row =  'T pulse'
@@ -595,7 +714,7 @@ class DynamicScheme(DataFit):
         #axes.plot(self.x_data, self.y_data, data_format)
         axes.set_xlabel('Idle duration, timesteps')
         axes.set_ylabel(self.plot_y_label())
-        axes.legend(loc='center')
+        axes.legend(loc='center',framealpha=0.4)
 
 
 class T1Fit(DataFit):
@@ -649,10 +768,11 @@ class T1Fit(DataFit):
         #axes.plot(self.x_data,reference,lw=2,alpha=0.5,color='r',label='Reference')
         axes.set_xlabel(self.plot_x_label())
         axes.set_ylabel(self.plot_y_label())
-        axes.legend(loc='best')
+        axes.legend(loc='best',framealpha=0.4)
 
 class polarization(DataFit):
-    x_row = 'T pulse' #3+2
+    #x_row = 'T pulse' #3+2
+    x_row = 'Delay to ref.col.'
     counts_type = 2
     fit_params_description = ['intensity',
                               'T_init',
@@ -668,7 +788,7 @@ class polarization(DataFit):
     def fit_fun(self,t,intensity, T2,level): #Must be defined by user
         return level+(intensity*np.exp(-(t/T2)))
     def x_fun(self, row):
-        return row[self.x_row]
+        return self.get_data_from_row(row,self.x_row)
 
     def y_fun(self, row):
 
@@ -694,7 +814,7 @@ class polarization(DataFit):
         #axes.plot(self.x_data,reference,lw=2,alpha=0.5,color='r',label='Reference')
         axes.set_xlabel(self.plot_x_label())
         axes.set_ylabel(self.plot_y_label())
-        axes.legend(loc='best')
+        axes.legend(loc='best',framealpha=0.4)
 
 class XY_mapfit():
     data_fit = ESRFit2
@@ -783,3 +903,72 @@ class Rabi_map(XY_mapfit):
     data_fit = RabiFit1_no_spectrum
     map_fit_parameter = 2 # Frequency
     subfit_plot_params = {}
+
+class RabiFitScanFreq(DataFit):
+    counts_type = 1
+    smooth_f = 5
+    data_fit=RabiFit1
+    def __init__(self,data, headers=[].copy()):
+        self.data_headers = headers
+        self.first_row = data[0]
+        self.all_data = np.array(data)
+        self.F_idx = headers.index('MW Frequency')
+        self.T_idx = headers.index('T pulse')
+        self.Fs = np.unique(self.all_data[:,self.F_idx])
+        self.Ts = np.unique(self.all_data[:,self.T_idx])
+        self.Tss,self.Fss = np.meshgrid(self.Ts,self.Fs)
+        self.Signal = np.array([self.y_fun(row) for row in self.all_data])
+        signal = []
+        self.subfits = []
+        self.Rabis = np.zeros(self.Fs.shape)
+        self.Rabi_errors = np.zeros(self.Fs.shape)
+        rabi_idx = self.data_fit.fit_params_description.index('Rabi frequency')
+        def select_and_smooth(i):
+            sw = int(self.smooth_f/2)
+            selected_idx = np.arange(i-sw,i+sw+1)
+            selected_idx = selected_idx[np.logical_and(selected_idx>0,selected_idx<len(self.Fs))]
+            d = [self.select_data_by_freq(self.Fs[i]) for i in selected_idx]
+            out = d[0]
+            for dd in d[1:]:
+                out+=dd
+            return out/len(d)
+        for i,f in enumerate(self.Fs):
+            good_idx = self.all_data[:,self.F_idx] == f
+            good_Ts  = self.all_data[good_idx,self.T_idx]
+            subsignal = self.Signal[good_idx]
+            signal.append(subsignal[np.argsort(good_Ts)])
+            cur_data = select_and_smooth(i)
+            try:
+                cur_fit = self.data_fit(cur_data,self.data_headers)
+                self.Rabis[i] = cur_fit.fit_parameters[rabi_idx]
+                self.Rabi_errors[i] = cur_fit.fit_parameters_error[rabi_idx]
+            except:
+                cur_fit = None
+                self.Rabis[i] = np.nan
+                self.Rabi_errors[i] = np.nan
+            self.subfits.append(cur_fit)
+
+        self.map_data = np.array(signal)
+        filt = np.ones((self.smooth_f,1))
+        d = s.convolve(self.map_data,filt,'same')
+        d /= s.convolve(np.ones((self.map_data.shape[0],1)),filt,'same')
+        self.map_data = d
+    def plot_me(self, axes, data_format=None, fit_format=None, comment=None):
+        assert isinstance(axes,matplotlib.axes.Axes)
+        im = axes.pcolormesh(self.Ts,self.Fs,self.map_data)
+        plt.gcf().colorbar(im)
+        axes.set_ylabel('F, Mhz')
+        axes.set_xlabel('T, ns')
+        axes.set_title(comment)
+        text_x = self.Ts[int(len(self.Ts)*0.7)]
+        for F,rabi,rabi_err in zip(self.Fs,self.Rabis,self.Rabi_errors):
+            axes.text(x=text_x,y=F,s='{0:.2f} ({1:.3f}) MHz'.format(rabi,rabi_err))
+        sp_plot = plt.axes([0.4,0.2,0.3,0.3])
+        sp_plot.set_xlabel('F, Mhz')
+        sp_plot.set_ylabel('$\Omega_R/2\pi$')
+        sp_plot.set_alpha(0.9)
+        sp_plot.plot(self.Fs,self.Rabis)
+        sp_plot.fill_between(self.Fs,self.Rabis-self.Rabi_errors,self.Rabis+self.Rabi_errors,alpha=0.5)
+    def select_data_by_freq(self,freq):
+        row_idxs = self.all_data[:, self.F_idx] == freq
+        return self.all_data[row_idxs,:]
