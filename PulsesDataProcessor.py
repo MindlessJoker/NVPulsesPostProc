@@ -26,12 +26,17 @@ class DataFitBySweepSelector():
                 return df[1]
         return DataFit
 class PulsesDataProcessor:
+    #RabiFit3sin)
     data_fit_funcs = {
         "Rabi oscillation" : DataFitBySweepSelector( [
                     ("T pulse",RabiFit1),
                     ("MW Frequency",ESRFit_pulsed),
+                    #(["T pulse","MW Power"],RabiCompositeSweep),
+                    (["T pulse","MW Power"],Rabi_map_power_freq),
                     (["T pulse","MW Frequency"],RabiFitScanFreq),
-                    (['X','Y',"T pulse"],Rabi_map)
+                    (['X','Y',"T pulse"],Rabi_map),
+                    (['X',"T pulse"],Rabi_map),
+                    (['Y',"T pulse"],Rabi_map)
         ]),
         "Pi pulse check"   : DataFitBySweepSelector( [ ("T pulse",PiPulseFit),("MW Frequency",ESRFit) ]),
         "Excitation-collection align": ExcitationCollectionAlignmentFit,
