@@ -11,7 +11,7 @@ files = os.listdir(DataDir)
 #rint(files)
 enable_date_filter = True
 antenna_stats = open('antenna_stats2.csv','w')
-date_to_make = '16-02-2017'
+date_to_make = '29-02-2017'
 antenna_stats.write('\t'.join(['Date','Comment','Ant','Rabi freq','Contrast','Power,dB','Rabi freq @ 40dB','Resonant frequency'])+'\n')
 for i,f in enumerate(files):
     if enable_date_filter:

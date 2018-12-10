@@ -48,7 +48,7 @@ newdata = data(files)
 # USER interface
 #####################################
 
-files_by_date = newdata.slice_by_date_crop_by_time ('22-07-2018',time1 = '00-00-00')
+files_by_date = newdata.slice_by_date_crop_by_time ('28-11-2018',time1 = '00-00-00')
 
 freqs = []
 powers = []

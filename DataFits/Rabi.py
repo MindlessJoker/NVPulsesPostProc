@@ -26,7 +26,7 @@ class RabiFit1(DataFit): #single
         fs,pwrs = get_power_spectrum(x_data*1e-3,y_data,df=0.1,maxF=self.max_frequency)
         f = fs[np.argmax(pwrs[1:])+1] #exclude 0 freq
         #print('Rabi fit: guessed F={0}'.format(f))
-        return [level,0.3, f, 6000.0,0.0]
+        return [level,0.3, f, 1000.0,0.0]
     #def parameter_scoring(self,*params):
      #   freq0=0.5
       #  freq1=8.5

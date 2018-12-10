@@ -37,7 +37,7 @@ class RamseyFit(DataFit):
     label_fit_params = [0,1,2,3,4,5,6]
     label_data_params = [0,1] # frequency, power
     def initial_guess(self,x_data,y_data): #Must be defined by user
-        return [1,0.1,0.1,0.1, 0.5, 200.0,0.0]
+        return [1,0.1,0.1,0.1, 0.05, 500.0,0.0]
     def fit_fun(self,t,level,a1,a2,a3, freq, T2_star,phi): #Must be defined by user
 
         freq0 = freq
@@ -55,7 +55,7 @@ class RamseyFit(DataFit):
         data_format = self.data_format if data_format is None else data_format
         fit_format = self.fit_format if fit_format is None else fit_format
         data_format = 'k+-' + '+-' if data_format is None else data_format
-        fit_format = 'r-' + '-' if fit_format is None else fit_format
+        fit_format = 'b-' + '-' if fit_format is None else fit_format
         axes.plot(self.x_data, self.y_data, 'k+-')
         x_data_fit, y_data_fit = self.fitted_data()
         axes.plot(x_data_fit, y_data_fit, fit_format, lw=3, label=self.compose_label())
@@ -93,6 +93,7 @@ class RabiFit(DataFit): # ens
 
 class RabiFit1(DataFit): #single
     max_frequency = 20.2
+    data_mean_window = 1
     fit_max_freq = 20.
     x_row = 'T pulse'
     counts_type=1
@@ -104,9 +105,23 @@ class RabiFit1(DataFit): #single
     label_fit_params = [1,2,3,4]
     #label_data_params = [0,1] # frequency, power #added in label_additional info
     def __init__(self,*args,**kwargs):
+
+        if self.data_mean_window>1:
+            wl = (self.data_mean_window//2)*2+1
+            w = np.ones(wl)/wl
+            args = list(args)
+            args[0] = np.array(args[0])
+            args[0][:,-1] = np.convolve(args[0][:,-1],w,'same')
+            args[0][:,-2] = np.convolve(args[0][:,-2],w,'same')
         super(RabiFit1,self).__init__(*args,**kwargs)
         self.plot_power_spectrum = True
         self.plot_envelope = True
+        if self.data_mean_window>1 and False:
+            wl = (self.data_mean_window//2)*2+1
+            w = np.ones(wl)/wl
+            self.y_data = np.convolve(self.y_data,w,'valid')
+            cut = self.data_mean_window//2
+            self.x_data = self.x_data[cut:-cut]
     def initial_guess(self,x_data,y_data): #Must be defined by user
         rabi_tresh = self.fit_max_freq
         level = max(y_data)
@@ -125,6 +140,7 @@ class RabiFit1(DataFit): #single
        #     return 0.
        # else:
        #     return 1.
+
     def label_additional_info(self):
         freq = self.fit_parameters[2]*1e-3 #in Ghz/ns
         fi = self.fit_parameters[4]
@@ -242,7 +258,6 @@ class RabiFit3sin(RabiFit1): #single
                 'Pi= {0:.1f} ns'.format(pi_length),
                 'Echo: pi= {0:.1f} ns, pi_comp={1:.1f} ns'.format(pi_length_uncomp, pi_comp)]
     def fit_fun(self,t,level,intensity, freq, T2_star,fi,freq2, freq3, A1, A2, A3): #Must be defined by user
-
         return level*(1.0 - intensity*0.5*(
             A1*np.cos(2*np.pi*freq*1e-3*t+fi)+
             A2*np.cos(2*np.pi*freq2*1e-3*t+fi)+
@@ -252,7 +267,57 @@ class RabiFit3sin(RabiFit1): #single
 
 
 
+class RabiFit3sin2(RabiFit1): #single
+    plot_power_spectrum = True
+    plot_envelope = True
 
+
+    fit_params_description = ['level',
+                              'Contrast',
+                              'Rabi frequency',
+                              'T2_star',
+                              'fi',
+                              'Center det',
+                              'A-1',
+                              'Amp+1']
+    label_fit_params = [1,2,3]
+    #label_data_params = [0,1] # frequency, power #added in label_additional info
+    def initial_guess(self,x_data,y_data): #Must be defined by user
+
+        params = super(RabiFit3sin2,self).initial_guess(x_data,y_data)
+        return [params[0],params[1], params[2],
+                params[3],0.,
+                0., 0., 0.]
+
+    #def parameter_scoring(self,*params):
+     #   freq0=0.5
+      #  freq1=8.5
+       # f = params[2]
+       # if freq0<f<freq1:
+       #     return 0.
+       # else:
+       #     return 1.
+    def label_additional_info(self):
+        freq = self.fit_parameters[2]*1e-3 #in Ghz/ns
+        fi = self.fit_parameters[4]
+        pi_length = (0.5 - fi/2./np.pi)/freq
+        pi_length_uncomp = (0.5)/freq
+        pi_comp = (-fi/2./np.pi)/freq
+        return ['MW: {0:.2f} @ {1:.1f}dBm'.format(*self.first_row[:2]),
+                'Pi= {0:.1f} ns'.format(pi_length),
+                'Echo: pi= {0:.1f} ns, pi_comp={1:.1f} ns'.format(pi_length_uncomp, pi_comp)]
+    def fit_fun(self,t,level,intensity, freq, T2_star,fi,center_det, A1, A2): #Must be defined by user
+        res_dist = 2.2
+        Am1 = np.min([0.5,np.abs(A1)])
+        Am2 = np.min([0.5,np.abs(A2)])
+        freq0 = np.sqrt(freq**2+center_det**2)
+        freq_m1 = np.sqrt(freq**2+(abs(center_det)-res_dist)**2)
+        freq_p1 = np.sqrt(freq**2+(abs(center_det)+res_dist)**2)
+        A0 = 1.-A1-A2
+        return level*(1.0 + intensity*0.5*(
+            A0 *np.cos(2*np.pi*freq0*1e-3*(t+fi))+
+            Am1*np.cos(2*np.pi*freq_m1*1e-3*(t+fi))+
+            Am2*np.cos(2*np.pi*freq_p1*1e-3*(t+fi)))*np.exp(-t/abs(T2_star)))
 
 class PiPulseFit(DataFit):
     x_row = 4 #Pi time
@@ -319,7 +384,7 @@ class ESRFitMono(DataFit):
 
         f = []
         f_step = x_data[1]-x_data[0]
-        f_window = 5 # Mhz
+        f_window = 4 # Mhz
         number =int(f_window/f_step)
         for i in range(len(x_data)-number):
             f.append(sum(y_data[i:i+number]))
@@ -358,7 +423,7 @@ class ESRFit(DataFit):
         y_data = np.append(y_data,np.random.normal(1,0.004,num))
         x_data = np.append(x_data,np.arange(x_data[-1],x_data[-1]+f_step*num,f_step))
         #widthtypical = int(20/f_step)
-        f_window = 10# Mhz
+        f_window = 5# Mhz
         number =int(f_window/(2*f_step))
         for i in range(len(x_data)-number):
             f.append(sum(y_data[i-number:i+number])/(2*number))
@@ -469,8 +534,8 @@ class ESRFit_pulsed(DataFit):
     def initial_guess(self, x_data, y_data):
         f0 = self.x_data[list(self.y_data).index(min(self.y_data))]
         scale = self.y_data[-1]
-        contrast = 0.1
-        width = 5
+        contrast = 0.01
+        width = 0.2
 
         params = [f0,width,contrast,scale]
         popt,pcov = opt.curve_fit(self.fitfun0,self.x_data,self.y_data,p0=params)
@@ -638,6 +703,92 @@ class EchoFit(DataFit):
         return level+(intensity*np.exp(-(t/T2)**N))
     def x_fun(self, row):
         return row[self.x_row]
+class EchoFitRevival(EchoFit4):
+    x_row = 'T echo' # 5 + 2
+    counts_type = 1
+    fit_params_description = ['intensity1',
+                              'N2',
+                              'T2',
+                              'level',
+                              'N',
+                              'Rev_freq']
+    label_fit_params = [0,1,2,3,4,5]
+    label_data_params = [0,1] # frequency, power
+    data_format = 'k-+'
+    fit_format = 'r-'
+
+
+    def initial_guess(self,x_data,y_data): #Must be defined by user
+        return [0.02,2.,50000,.0,3.,50]
+    def fit_fun(self,t,intensity1, N2, T2,level,N, freq): #Must be defined by user#
+        return level+((0.5+0.5*np.cos(2*np.pi*abs(freq)*t/1e6))**np.min([abs(N2),3.]))*intensity1*np.exp(-(t/T2)**N)
+    def envelope(self,t,intensity1, N2, T2,level,N, freq):
+        return level+(1.*intensity1*np.exp(-(t/T2)**N))
+
+    def envelopes(self,t0,t1,n_points=200):
+        ts = np.linspace(t0,t1,n_points)
+        intensity = self.fit_parameters[0]
+        #intensity = self.fit_parameters[1]
+        T2 = self.fit_parameters[2]
+        level = self.fit_parameters[3]
+        N = self.fit_parameters[4]
+        env_p = level+((0.5+0.5*1)*intensity*np.exp(-(ts/T2)**N))
+        env_m = level+((0.5-0.5*1)*intensity*np.exp(-(ts/T2)**N))
+        return ts,env_p,env_m
+    def plot_fft(self,axes,xs,ys):
+        fs,power_spectrum = get_power_spectrum(xs*1e-3,ys,df=0.1,maxF=13.)
+        sp_plot = plt.axes([0.6,0.2,0.3,0.1])
+        sp_plot.set_xlabel('F, Mhz')
+        sp_plot.set_ylabel('Power')
+        sp_plot.set_alpha(0.5)
+        sp_plot.set_yscale('linear')
+        sp_plot.get_yaxis().set_ticks([])
+        sp_plot.plot(fs,power_spectrum)
+    def plot_me(self, axes, data_format=None, fit_format=None,comment=None):
+
+        import json
+        #super(EchoFitRevival,self).plot_me(axes,data_format,fit_format,comment)
+        data = {}
+
+        c = 'r'
+        data_format = self.data_format if data_format is None else data_format
+        fit_format = self.fit_format if fit_format is None else fit_format
+        data_format = c + '+-' if data_format is None else data_format
+        fit_format = c + '--' if fit_format is None else fit_format
+        axes.plot(self.x_data, self.y_data, data_format)
+
+        data['data'] = [self.x_data.tolist(), self.y_data.tolist()]
+        x_data_fit, y_data_fit = self.fitted_data()
+        axes.plot(x_data_fit, y_data_fit, fit_format, lw=1, label=self.compose_label())
+
+        data['fit'] = [list(x_data_fit), list(y_data_fit)]
+
+        t0  = min(0,-self.fit_parameters[4]/(2.*np.pi*self.fit_parameters[2]*1.e-3))
+        ts,env_p,env_m = self.envelopes(t0,max(x_data_fit))
+        env_params = dict(color='r',alpha=0.8,lw=2.5)
+        axes.plot(ts,env_p,'-',**env_params)
+        axes.plot(ts,env_m,'-',**env_params)
+
+        data['env'] = [x.tolist() for x in [ts,env_p, env_m]]
+
+        self.plot_fft(axes,xs=self.x_data,ys=self.y_data)
+
+        json.dump(data,open('dumper.json','w'))
+
+        #axes.plot(self.x_data, self.y_data, data_format)
+        signal = self.all_data[:,-1]
+        reference = self.all_data[:,-2]
+        norm = np.mean((signal+reference)/2.)
+
+        signal/=norm
+        reference/=norm
+        #axes.plot(self.x_data,signal,lw=2,alpha=0.5,color='g',label='Signal')
+        #axes.plot(self.x_data,reference,lw=2,alpha=0.5,color='r',label='Reference')
+        axes.set_xlabel(self.plot_x_label())
+        axes.set_ylabel(self.plot_y_label())
+        axes.legend(loc='best',framealpha=0.4)
+        #axes.plot(x_data_fit, self.envelope(x_data_fit,*self.fit_parameters), '--', lw=3, label=self.compose_label())
+
 
 
 class DynamicScheme(DataFit):

@@ -45,7 +45,8 @@ class PulsesDataProcessor:
                 ("MW Frequency",ESRFit),
                 (['X','Y',"MW Frequency"],ESR_map) ]
         ),
-        "Spin echo": EchoFit4,
+        # "Spin echo": EchoFit4,
+        "Spin echo": EchoFitRevival,
         "Dynamic Scheme": DynamicScheme,
         "T1":T1Fit,
         "Ramsey\n":RamseyFit
